@@ -1,0 +1,7 @@
+Building:
+
+The test program is designed for easy building without needing any build management tools:
+
+gcc test.c -o test -Ofast -march=native
+
+Takes a filename as an argument to benchmark encoding and decoding against.
