@@ -1,6 +1,26 @@
 #include "rle.h"
 #include <x86intrin.h>
 
+uint32_t naive_rle(uint64_t *raw_Data_u64, uint32_t len, uint8_t *dst){
+    uint8_t *raw_Data = (uint8_t*)raw_Data_u64;
+
+    uint8_t *init_dst = dst;
+    uint8_t cur_val = raw_Data[0];
+    uint32_t cur_run = 1;
+    for (int i = 1; i < len; i++){
+        if((raw_Data[i] != cur_val) | (cur_run == 256)){
+            *(dst++) = (cur_run - 1);
+            *(dst++) = cur_val;
+
+            cur_val = raw_Data[i];
+            cur_run = 0;
+        }
+            cur_run++;
+    }
+
+    return (dst - init_dst);
+}
+
 uint32_t rle_encode(uint64_t *raw_Data_u64, uint32_t len, uint8_t *dst)
 {
     uint64_t cur_val = 0;
@@ -14,8 +34,6 @@ uint32_t rle_encode(uint64_t *raw_Data_u64, uint32_t len, uint8_t *dst)
     uint64_t *comp_ptr_start = comp_ptr;
     for (int j = 1; j < len / sizeof(uint64_t); j++)
     {
-        if (len / sizeof(uint64_t) != (65536 / 8))
-            printf("len = %d\r\n", len);
         cur_val = next_val;
         next_val = raw_Data_u64[j];
         uint64_t cur_val_shifted = (cur_val >> 8) | (next_val << 56);
@@ -42,27 +60,6 @@ uint32_t rle_encode(uint64_t *raw_Data_u64, uint32_t len, uint8_t *dst)
         else
         {
             int32_t avail_bits = 64;
-            if ((equality_mask & 0xffffffff) == 0)
-            {
-                uint8_t proc_byte = cur_val;
-                if (c_val == proc_byte && c_runLen + 32 <= 256 * 8)
-                    c_runLen += 32;
-                else
-                {
-                    comp_str_cntr++;
-                    comp_str = (comp_str << 16) | (c_val << 8) | (c_runLen / 8 - 1);
-                    if ((comp_str_cntr & 3) == 0)
-                        *(comp_ptr++) = comp_str;
-                    //last write, no need to save values further
-                    c_runLen = 32;
-                    c_val = proc_byte;
-                }
-
-                avail_bits -= 32;
-                cur_val >>= 32;
-                equality_mask >>= 32;
-                equality_mask &= ~0xff;
-            }
             for (; avail_bits > 0;)
             {
                 uint8_t proc_byte = cur_val;
@@ -87,7 +84,6 @@ uint32_t rle_encode(uint64_t *raw_Data_u64, uint32_t len, uint8_t *dst)
                 avail_bits -= matched_bits;
                 cur_val >>= matched_bits;
                 equality_mask >>= matched_bits;
-                equality_mask &= ~0xff;
             }
         }
     }
@@ -115,27 +111,6 @@ uint32_t rle_encode(uint64_t *raw_Data_u64, uint32_t len, uint8_t *dst)
     else
     {
         int32_t avail_bits = 64;
-        if ((equality_mask & 0xffffffff) == 0)
-        {
-            uint8_t proc_byte = cur_val;
-            if (c_val == proc_byte && c_runLen + 32 <= 256 * 8)
-                c_runLen += 32;
-            else
-            {
-                comp_str_cntr++;
-                comp_str = (comp_str << 16) | (c_val << 8) | (c_runLen / 8 - 1);
-                if ((comp_str_cntr & 3) == 0)
-                    *(comp_ptr++) = comp_str;
-                //last write, no need to save values further
-                c_runLen = 32;
-                c_val = proc_byte;
-            }
-
-            avail_bits -= 32;
-            cur_val >>= 32;
-            equality_mask >>= 32;
-            equality_mask &= ~0xff;
-        }
         for (; avail_bits > 0;)
         {
             uint8_t proc_byte = cur_val;
@@ -160,7 +135,6 @@ uint32_t rle_encode(uint64_t *raw_Data_u64, uint32_t len, uint8_t *dst)
             avail_bits -= matched_bits;
             cur_val >>= matched_bits;
             equality_mask >>= matched_bits;
-            equality_mask &= ~0xff;
         }
     }
     if (c_runLen != 0)
@@ -170,7 +144,11 @@ uint32_t rle_encode(uint64_t *raw_Data_u64, uint32_t len, uint8_t *dst)
         if ((comp_str_cntr & 3) == 0)
             *(comp_ptr++) = comp_str;
     }
-    *(comp_ptr++) = comp_str;
+    if((comp_str_cntr & 3) != 0){
+        comp_str <<= (16 * (-comp_str_cntr & 3));
+        *(comp_ptr++) = comp_str;
+        comp_str_cntr = (comp_str_cntr + 3) & ~3;
+    }
 
     return comp_str_cntr * 2;
 }
@@ -179,7 +157,6 @@ uint32_t rle_decode(uint64_t *comp_data_space, uint32_t rle_len, uint8_t *decomp
 {
     uint8_t *tmp_ptr = (uint8_t *)decomp_pool;
     uint64_t *comp_ptr = (uint64_t *)comp_data_space;
-    uint32_t rle_len2 = (rle_len + 7) / 8;
     uint32_t iter = 0;
     uint64_t last_write = 0;
 
@@ -192,10 +169,9 @@ uint32_t rle_decode(uint64_t *comp_data_space, uint32_t rle_len, uint8_t *decomp
         0xffffff0000000000,
         0xffff000000000000,
         0xff00000000000000,
-        0x0000000000000000,
     };
 
-    for (int j = 0; j < rle_len2; j++)
+    for (int j = 0; j < rle_len / 8; j++)
     {
         uint64_t v_net = *(comp_ptr++);
 
@@ -205,6 +181,7 @@ uint32_t rle_decode(uint64_t *comp_data_space, uint32_t rle_len, uint8_t *decomp
         uint64_t *tmp_ptr_64;
         uint64_t mask;
         uint64_t v_64_s;
+        uint32_t iter_tmp;
 
         //Align the value being written so the pointer can be aligned
         //std::cout << "len: " << std::dec << len << " v: " << v << " iter: " << iter << std::hex << " v_64_s: " << v_64_s << std::endl;
@@ -213,12 +190,13 @@ uint32_t rle_decode(uint64_t *comp_data_space, uint32_t rle_len, uint8_t *decomp
     v = (v_net >> ((off + 1) * 8)) & 0xff;              \
     v_64 = v * 0x0101010101010101;                      \
     tmp_ptr_64 = (uint64_t *)&tmp_ptr[iter & ~7];       \
-    mask = mask_lut[(iter & 0x7)];                      \
-    v_64_s = last_write ^ ((last_write ^ v_64) & mask); \
+    iter_tmp = iter & 0x7;\
+    mask = mask_lut[iter_tmp];                      \
+    v_64_s = last_write ^( (last_write ^ v_64) & mask);\
     last_write = v_64_s;                                \
     *(tmp_ptr_64++) = v_64_s;                           \
     iter += len;                                        \
-    len = (len + 7) / 8;                                \
+    len = (len - (8 - iter_tmp) + 7) / 8;                                \
     if (len > 0)                                        \
         last_write = v_64;                              \
     while (len-- > 0)                                   \
@@ -229,7 +207,6 @@ uint32_t rle_decode(uint64_t *comp_data_space, uint32_t rle_len, uint8_t *decomp
         INNER_LOOP(2)
         INNER_LOOP(0)
     }
-
     //for (int j = 0; j < 64 * 1024; j++)
     //    if (decomp_pool[j] != raw_Data[j])
     //    {
