@@ -12,18 +12,31 @@ void main(int argc, char *argv[])
 
     uint8_t *src_pool = calloc((pos + 7) / 8, 8);
     uint8_t *dst_pool = calloc((pos + 7) / 8, 8);
+    uint8_t *dec_pool = calloc((pos + 7) / 8, 8);
 
     fread(src_pool, 1, pos, f);
     fclose(f);
 
     uint32_t encoded_len = rle_encode((uint64_t *)src_pool, pos, dst_pool);
+    rle_decode((uint64_t *)dst_pool, encoded_len, dec_pool);
+
+    for (uint32_t i = 0; i < pos; i++)
+        if (src_pool[i] != dec_pool[i])
+        {
+            printf("Mismatch at [%d] = %d should be %d\r\n", i, dec_pool[i], src_pool[i]);
+
+            f = fopen("out.bin", "wb");
+            fwrite(dst_pool, 1, encoded_len, f);
+            fclose(f);
+            break;
+        }
 
     printf("Source Len: %d \r\n", pos);
     printf("Encoded Len: %d (%f%%) \r\n", encoded_len, (encoded_len / (float)pos) * 100);
 
     struct timespec tstart;
     struct timespec tstop;
-    uint32_t iter_cnt = 10;
+    uint32_t iter_cnt = 10000;
 
     clock_gettime(CLOCK_REALTIME, &tstart);
     for (int i = 0; i < iter_cnt; i++)
