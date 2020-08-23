@@ -45,7 +45,7 @@ void main(int argc, char *argv[])
 
     struct timespec tstart;
     struct timespec tstop;
-    uint32_t iter_cnt = 100000;
+    uint32_t iter_cnt = 20000;
 
     clock_gettime(CLOCK_REALTIME, &tstart);
     for (int i = 0; i < iter_cnt; i++)
