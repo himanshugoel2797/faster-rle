@@ -57,7 +57,9 @@ uint32_t rle_encode(uint64_t *raw_Data_u64, uint32_t len, uint8_t *dst)
         //shift vector by 1 byte
         //blendv
         //xor
+        //cmpeq
         //movemask
+        //not
         //tzcnt trick
         cur_val = next_val;
         next_val = raw_Data_u64[j];
@@ -201,33 +203,33 @@ uint32_t rle_decode(uint64_t *comp_data_space, uint32_t rle_len, uint8_t *decomp
 
         //Align the value being written so the pointer can be aligned
         //std::cout << "len: " << std::dec << len << " v: " << v << " iter: " << iter << std::hex << " v_64_s: " << v_64_s << std::endl;
-#define INNER_LOOP(off)                                                             \
-    len = comp_ptr_8[off];                                                          \
-    v = comp_ptr_8[(off + 1)];                                                      \
-    if ((iter & 0xf) == 0)                                                          \
-    {                                                                               \
-        tmp_ptr_64 = (uint64_t *)&tmp_ptr[iter];                                    \
-        iter += len + 1;                                                            \
-        len /= 16;                                                                  \
-        __m128i c16 = _mm_set_epi8(v, v, v, v, v, v, v, v, v, v, v, v, v, v, v, v); \
-        while (len-- >= 0)                                                          \
-        {                                                                           \
-            _mm_store_si128((__m128i *)tmp_ptr_64, c16);                            \
-            tmp_ptr_64 += 2;                                                        \
-        }                                                                           \
-    }                                                                               \
-    else                                                                            \
-    {                                                                               \
-        v_64 = v * 0x0101010101010101;                                              \
-        tmp_ptr_64 = (uint64_t *)&tmp_ptr[iter & ~7];                               \
-        iter_tmp = iter & 0x7;                                                      \
-        mask = mask_lut[iter_tmp];                                                  \
-        v_64_s = (*(tmp_ptr_64) & ~mask) | (v_64 & mask);                           \
-        *(tmp_ptr_64++) = v_64_s;                                                   \
-        iter += len + 1;                                                            \
-        len = (len - (7 - iter_tmp) + 7) / 8;                                       \
-        while (len-- > 0)                                                           \
-            *(tmp_ptr_64++) = v_64;                                                 \
+#define INNER_LOOP(off)                                   \
+    len = comp_ptr_8[off];                                \
+    v = comp_ptr_8[(off + 1)];                            \
+    if ((iter & 0xf) == 0)                                \
+    {                                                     \
+        tmp_ptr_64 = (uint64_t *)&tmp_ptr[iter];          \
+        iter += len + 1;                                  \
+        len /= 16;                                        \
+        __m128i c16 = _mm_set1_epi8(v);                   \
+        while (len-- >= 0)                                \
+        {                                                 \
+            _mm_store_si128((__m128i *)tmp_ptr_64, c16);  \
+            tmp_ptr_64 += 2;                              \
+        }                                                 \
+    }                                                     \
+    else                                                  \
+    {                                                     \
+        v_64 = v * 0x0101010101010101;                    \
+        tmp_ptr_64 = (uint64_t *)&tmp_ptr[iter & ~7];     \
+        iter_tmp = iter & 0x7;                            \
+        mask = mask_lut[iter_tmp];                        \
+        v_64_s = (*(tmp_ptr_64) & ~mask) | (v_64 & mask); \
+        *(tmp_ptr_64++) = v_64_s;                         \
+        iter += len + 1;                                  \
+        len = (len - (7 - iter_tmp) + 7) / 8;             \
+        while (len-- > 0)                                 \
+            *(tmp_ptr_64++) = v_64;                       \
     }
 
         INNER_LOOP(0)
