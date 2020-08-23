@@ -110,39 +110,9 @@ uint32_t rle_encode(uint64_t *raw_Data_u64, uint32_t len, uint8_t *dst)
     return (comp_ptr - dst);
 }
 
-_Alignas(16) uint64_t mask_lut[] = {
-    0xffffffffffffffff,
-    0xffffffffffffffff,
-    0xffffffffffffffff,
-    0xffffffffffffff00,
-    0xffffffffffffffff,
-    0xffffffffffff0000,
-    0xffffffffffffffff,
-    0xffffffffff000000,
-    0xffffffffffffffff,
-    0xffffffff00000000,
-    0xffffffffffffffff,
-    0xffffff0000000000,
-    0xffffffffffffffff,
-    0xffff000000000000,
-    0xffffffffffffffff,
-    0xff00000000000000,
-    0xffffffffffffffff,
-    0x0000000000000000,
-    0xffffffffffffff00,
-    0x0000000000000000,
-    0xffffffffffff0000,
-    0x0000000000000000,
-    0xffffffffff000000,
-    0x0000000000000000,
-    0xffffffff00000000,
-    0x0000000000000000,
-    0xffffff0000000000,
-    0x0000000000000000,
-    0xffff000000000000,
-    0x0000000000000000,
-    0xff00000000000000,
-    0x0000000000000000,
+_Alignas(16) uint8_t mask_lut2[] = {
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,
 };
 
 uint32_t rle_decode(uint64_t *comp_data_space, uint32_t rle_len, uint8_t *decomp_pool)
@@ -169,36 +139,126 @@ uint32_t rle_decode(uint64_t *comp_data_space, uint32_t rle_len, uint8_t *decomp
 
         //Align the value being written so the pointer can be aligned
         //std::cout << "len: " << std::dec << len << " v: " << v << " iter: " << iter << std::hex << " v_64_s: " << v_64_s << std::endl;
-#define INNER_LOOP(off)                                                  \
-    len = comp_ptr_8[off];                                               \
-    v = comp_ptr_8[(off + 1)];                                           \
-    if ((iter & 0xf) == 0)                                               \
-    {                                                                    \
-        tmp_ptr_64 = (uint64_t *)&tmp_ptr[iter];                         \
-        iter += len + 1;                                                 \
-        len /= 16;                                                       \
-        __m128i c16 = _mm_set1_epi8(v);                                  \
-        while (len-- >= 0)                                               \
-        {                                                                \
-            _mm_store_si128((__m128i *)tmp_ptr_64, c16);                 \
-            tmp_ptr_64 += 2;                                             \
-        }                                                                \
-    }                                                                    \
-    else                                                                 \
-    {                                                                    \
-        __m128i v_64_v = _mm_set1_epi8(v);                               \
-        __m128i *tmp_ptr_128 = (__m128i *)&tmp_ptr[iter & ~0xf];         \
-        __m128i tmp_mem = _mm_load_si128(tmp_ptr_128);                   \
-        iter_tmp = iter & 0xf;                                           \
-        __m128i mask_v = _mm_load_si128((__m128i *)&mask_lut[iter_tmp]); \
-        __m128i v_64_s_v = _mm_blendv_epi8(tmp_mem, v_64_v, mask_v);     \
-        _mm_store_si128(tmp_ptr_128++, v_64_s_v);                        \
-        iter += len + 1;                                                 \
-        len = (len - (15 - iter_tmp) + 15) / 16;                         \
-        while (len-- > 0)                                                \
-        {                                                                \
-            _mm_store_si128(tmp_ptr_128++, v_64_v);                      \
-        }                                                                \
+//#define INNER_LOOP(off)                                                  
+    len = comp_ptr_8[0];                                               
+    v = comp_ptr_8[(0 + 1)];                                           
+    if ((iter & 0xf) == 0)                                               
+    {                                                                    
+        tmp_ptr_64 = (uint64_t *)&tmp_ptr[iter];                         
+        iter += len + 1;                                                 
+        len /= 16;                                                       
+        __m128i c16 = _mm_set1_epi8(v);                                  
+        while (len-- >= 0)                                               
+        {                                                                
+            _mm_store_si128((__m128i *)tmp_ptr_64, c16);                 
+            tmp_ptr_64 += 2;                                             
+        }                                                                
+    }                                                                    
+    else                                                                 
+    {                                                                    
+        __m128i v_64_v = _mm_set1_epi8(v);                               
+        __m128i *tmp_ptr_128 = (__m128i *)&tmp_ptr[iter & ~0xf];         
+        __m128i tmp_mem = _mm_load_si128(tmp_ptr_128);                   
+        iter_tmp = iter & 0xf;                                           
+        __m128i mask_v = _mm_loadu_si128((__m128i*)(mask_lut2 + 16 - iter_tmp)); //_mm_load_si128((__m128i *)&mask_lut[iter_tmp * 2]); 
+        __m128i v_64_s_v = _mm_blendv_epi8(tmp_mem, v_64_v, mask_v);     
+        _mm_store_si128(tmp_ptr_128++, v_64_s_v);                        
+        iter += len + 1;                                                 
+        len = (len - (15 - iter_tmp) + 15) / 16;                         
+        while (len-- > 0)                                                
+        {                                                                
+            _mm_store_si128(tmp_ptr_128++, v_64_v);                      
+        }                                                                
+    }
+    len = comp_ptr_8[2];                                               
+    v = comp_ptr_8[(2 + 1)];                                           
+    if ((iter & 0xf) == 0)                                               
+    {                                                                    
+        tmp_ptr_64 = (uint64_t *)&tmp_ptr[iter];                         
+        iter += len + 1;                                                 
+        len /= 16;                                                       
+        __m128i c16 = _mm_set1_epi8(v);                                  
+        while (len-- >= 0)                                               
+        {                                                                
+            _mm_store_si128((__m128i *)tmp_ptr_64, c16);                 
+            tmp_ptr_64 += 2;                                             
+        }                                                                
+    }                                                                    
+    else                                                                 
+    {                                                                    
+        __m128i v_64_v = _mm_set1_epi8(v);                               
+        __m128i *tmp_ptr_128 = (__m128i *)&tmp_ptr[iter & ~0xf];         
+        __m128i tmp_mem = _mm_load_si128(tmp_ptr_128);                   
+        iter_tmp = iter & 0xf;                                           
+        __m128i mask_v = _mm_loadu_si128((__m128i*)(mask_lut2 + 16 - iter_tmp)); //_mm_load_si128((__m128i *)&mask_lut[iter_tmp * 2]); 
+        __m128i v_64_s_v = _mm_blendv_epi8(tmp_mem, v_64_v, mask_v);     
+        _mm_store_si128(tmp_ptr_128++, v_64_s_v);                        
+        iter += len + 1;                                                 
+        len = (len - (15 - iter_tmp) + 15) / 16;                         
+        while (len-- > 0)                                                
+        {                                                                
+            _mm_store_si128(tmp_ptr_128++, v_64_v);                      
+        }                                                                
+    }
+    len = comp_ptr_8[4];                                               
+    v = comp_ptr_8[(4 + 1)];                                           
+    if ((iter & 0xf) == 0)                                               
+    {                                                                    
+        tmp_ptr_64 = (uint64_t *)&tmp_ptr[iter];                         
+        iter += len + 1;                                                 
+        len /= 16;                                                       
+        __m128i c16 = _mm_set1_epi8(v);                                  
+        while (len-- >= 0)                                               
+        {                                                                
+            _mm_store_si128((__m128i *)tmp_ptr_64, c16);                 
+            tmp_ptr_64 += 2;                                             
+        }                                                                
+    }                                                                    
+    else                                                                 
+    {                                                                    
+        __m128i v_64_v = _mm_set1_epi8(v);                               
+        __m128i *tmp_ptr_128 = (__m128i *)&tmp_ptr[iter & ~0xf];         
+        __m128i tmp_mem = _mm_load_si128(tmp_ptr_128);                   
+        iter_tmp = iter & 0xf;                                           
+        __m128i mask_v = _mm_loadu_si128((__m128i*)(mask_lut2 + 16 - iter_tmp)); //_mm_load_si128((__m128i *)&mask_lut[iter_tmp * 2]); 
+        __m128i v_64_s_v = _mm_blendv_epi8(tmp_mem, v_64_v, mask_v);     
+        _mm_store_si128(tmp_ptr_128++, v_64_s_v);                        
+        iter += len + 1;                                                 
+        len = (len - (15 - iter_tmp) + 15) / 16;                         
+        while (len-- > 0)                                                
+        {                                                                
+            _mm_store_si128(tmp_ptr_128++, v_64_v);                      
+        }                                                                
+    }
+    len = comp_ptr_8[6];                                               
+    v = comp_ptr_8[(6 + 1)];                                           
+    if ((iter & 0xf) == 0)                                               
+    {                                                                    
+        tmp_ptr_64 = (uint64_t *)&tmp_ptr[iter];                         
+        iter += len + 1;                                                 
+        len /= 16;                                                       
+        __m128i c16 = _mm_set1_epi8(v);                                  
+        while (len-- >= 0)                                               
+        {                                                                
+            _mm_store_si128((__m128i *)tmp_ptr_64, c16);                 
+            tmp_ptr_64 += 2;                                             
+        }                                                                
+    }                                                                    
+    else                                                                 
+    {                                                                    
+        __m128i v_64_v = _mm_set1_epi8(v);                               
+        __m128i *tmp_ptr_128 = (__m128i *)&tmp_ptr[iter & ~0xf];         
+        __m128i tmp_mem = _mm_load_si128(tmp_ptr_128);                   
+        iter_tmp = iter & 0xf;                                           
+        __m128i mask_v = _mm_loadu_si128((__m128i*)(mask_lut2 + 16 - iter_tmp)); //_mm_load_si128((__m128i *)&mask_lut[iter_tmp * 2]); 
+        __m128i v_64_s_v = _mm_blendv_epi8(tmp_mem, v_64_v, mask_v);     
+        _mm_store_si128(tmp_ptr_128++, v_64_s_v);                        
+        iter += len + 1;                                                 
+        len = (len - (15 - iter_tmp) + 15) / 16;                         
+        while (len-- > 0)                                                
+        {                                                                
+            _mm_store_si128(tmp_ptr_128++, v_64_v);                      
+        }                                                                
     }
         /*v_64 = v * 0x0101010101010101;                               \
         tmp_ptr_64 = (uint64_t *)&tmp_ptr[iter & ~7];                \
@@ -211,10 +271,10 @@ uint32_t rle_decode(uint64_t *comp_data_space, uint32_t rle_len, uint8_t *decomp
         while (len-- > 0)                                            \
             *(tmp_ptr_64++) = v_64;                                  \*/
 
-        INNER_LOOP(0)
-        INNER_LOOP(2)
-        INNER_LOOP(4)
-        INNER_LOOP(6)
+        //INNER_LOOP(0)
+        //INNER_LOOP(2)
+        //INNER_LOOP(4)
+        //INNER_LOOP(6)
         comp_ptr_8 += 8;
         //INNER_LOOP(2)
         //INNER_LOOP(4)
@@ -232,15 +292,15 @@ uint32_t rle_decode(uint64_t *comp_data_space, uint32_t rle_len, uint8_t *decomp
         uint64_t iter_tmp;
         uint64_t v_64_s;
 
-        INNER_LOOP(0);
+        //INNER_LOOP(0);
 
         if (rle_len > 2)
         {
-            INNER_LOOP(2);
+          //  INNER_LOOP(2);
         }
         if (rle_len > 4)
         {
-            INNER_LOOP(4);
+           // INNER_LOOP(4);
         }
     }
     //for (int j = 0; j < 64 * 1024; j++)
