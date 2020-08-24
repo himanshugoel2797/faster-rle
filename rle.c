@@ -27,30 +27,15 @@ uint32_t naive_rle(uint64_t *raw_Data_u64, uint32_t len, uint8_t *dst)
     return (dst - init_dst);
 }
 
-uint32_t entropy_rle(uint8_t *raw_Data_u64, uint32_t len, uint8_t *dst)
-{
-    uint32_t counts[256];
-    memset(counts, 0, 256 * sizeof(uint32_t));
-    for (int i = 0; i < len; i++)
-        counts[raw_Data_u64[i]]++;
-    uint32_t max_idx = 0;
-    for (int i = 1; i < 256; i++)
-        if (counts[i] > counts[max_idx])
-            max_idx = i;
-    return -1;
-}
-
 uint32_t rle_encode(uint64_t *raw_Data_u64, uint32_t len, uint8_t *dst)
 {
+    uint8_t *raw_Data = (uint8_t *)raw_Data_u64;
+    int32_t c_runLen = 0;
+    uint32_t c_val = raw_Data[0];
     __m256i cur_val;
     __m256i next_val = _mm256_load_si256((__m256i *)&raw_Data_u64[0]);
-    uint32_t c_runLen = 0;
-    uint32_t c_val = _mm256_extract_epi8(next_val, 0);
     uint8_t *comp_ptr = (uint8_t *)dst;
-    uint64_t comp_str = 0;
-    uint32_t comp_str_cntr = 0;
-
-    uint8_t *raw_Data = (uint8_t *)raw_Data_u64;
+    
     raw_Data += 32;
     for (int j = 1; j < len / (sizeof(uint64_t) * 4); j++)
     {
