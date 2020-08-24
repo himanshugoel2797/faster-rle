@@ -69,17 +69,7 @@ uint32_t rle_encode(uint64_t *raw_Data_u64, uint32_t len, uint8_t *dst)
             if (zero_bits > avail_bits)
                 zero_bits = avail_bits;
 
-            uint32_t tmp_rlen = c_runLen + zero_bits;
-            if (tmp_rlen <= 255)
-                c_runLen = tmp_rlen;
-            else
-            {
-                comp_ptr[0] = c_runLen;
-                comp_ptr[1] = c_val;
-                comp_ptr += 2;
-
-                c_runLen = zero_bits;
-            }
+            c_runLen += zero_bits;
             avail_bits -= zero_bits;
             equality_mask >>= zero_bits;
 
@@ -87,11 +77,13 @@ uint32_t rle_encode(uint64_t *raw_Data_u64, uint32_t len, uint8_t *dst)
             {
                 //if (c_runLen > 0)
                 {
-                    comp_ptr[0] = c_runLen;
-                    comp_ptr[1] = c_val;
-                    comp_ptr += 2;
-
-                    c_runLen = 0;
+                    do{
+                        uint8_t c_r = c_runLen >= 255;
+                        comp_ptr[0] = c_r ? 255 : c_runLen;
+                        c_runLen -= c_r ? 255 : c_runLen;
+                        comp_ptr[1] = c_val;
+                        comp_ptr += 2;
+                    }while(c_runLen > 0);
                     c_val = raw_Data[1 - avail_bits];
                 }
                 avail_bits--;
@@ -102,7 +94,7 @@ uint32_t rle_encode(uint64_t *raw_Data_u64, uint32_t len, uint8_t *dst)
     }
     if (c_runLen != 0)
     {
-        comp_ptr[0] = c_runLen - 1;
+        comp_ptr[0] = c_runLen;
         comp_ptr[1] = c_val;
         comp_ptr += 2;
     }
