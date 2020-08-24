@@ -101,9 +101,6 @@ uint32_t rle_decode(uint64_t *comp_data_space, uint32_t rle_len,
     uint32_t iter = 0;
     uint64_t last_write = 0;
 
-    // build 64 bit values and write them in one go
-    //(iter & 7) << 3 | (len & 7)
-
     for (int j = 0; j < rle_len / 8; j++)
     {
         uint64_t *tmp_ptr_64;
@@ -170,10 +167,11 @@ uint32_t rle_decode(uint64_t *comp_data_space, uint32_t rle_len,
         comp_ptr_8 += 8;
     }
 
-    rle_len = rle_len & 0xf;
+    rle_len = rle_len & 0x7;
     if (rle_len > 0)
     {
         uint64_t *tmp_ptr_64;
+        uint8_t *tmp_ptr_u8;
         int32_t len;
         uint8_t v;
         uint64_t v_64;
@@ -181,22 +179,53 @@ uint32_t rle_decode(uint64_t *comp_data_space, uint32_t rle_len,
         uint64_t iter_tmp;
         uint64_t v_64_s;
 
-        // INNER_LOOP(0);
+        {
+            len = comp_ptr_8[0];
+            v = comp_ptr_8[(0 + 1)];
+            tmp_ptr_u8 = (uint8_t *)&tmp_ptr[iter];
+            iter += len + 1;
+            len /= 16;
+            __m128i c16 = _mm_set1_epi8(v);
+            while (len-- >= 0)
+            {
+                _mm_storeu_si128((__m128i *)tmp_ptr_u8, c16);
+                tmp_ptr_u8 += 16;
+            }
+        }
 
         if (rle_len > 2)
         {
-            //  INNER_LOOP(2);
+            {
+                len = comp_ptr_8[2];
+                v = comp_ptr_8[(2 + 1)];
+                tmp_ptr_u8 = (uint8_t *)&tmp_ptr[iter];
+                iter += len + 1;
+                len /= 16;
+                __m128i c16 = _mm_set1_epi8(v);
+                while (len-- >= 0)
+                {
+                    _mm_storeu_si128((__m128i *)tmp_ptr_u8, c16);
+                    tmp_ptr_u8 += 16;
+                }
+            }
         }
         if (rle_len > 4)
         {
-            // INNER_LOOP(4);
+            {
+                len = comp_ptr_8[4];
+                v = comp_ptr_8[(4 + 1)];
+                tmp_ptr_u8 = (uint8_t *)&tmp_ptr[iter];
+                iter += len + 1;
+                len /= 16;
+                __m128i c16 = _mm_set1_epi8(v);
+                while (len-- >= 0)
+                {
+                    _mm_storeu_si128((__m128i *)tmp_ptr_u8, c16);
+                    tmp_ptr_u8 += 16;
+                }
+            }
         }
     }
-    // for (int j = 0; j < 64 * 1024; j++)
-    //    if (decomp_pool[j] != raw_Data[j])
-    //    {
-    //        std::cout << "Not matched at " << j << " Value found decomp[j]: " <<
-    //        (int)decomp_pool[j] << "\r\n"; break;
-    //    }
+
     return iter;
 }
